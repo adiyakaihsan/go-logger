@@ -10,19 +10,20 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adiyakaihsan/go-logger/pkg/types"
+	"github.com/adiyakaihsan/go-logger/pkg/queue"
 	bleve "github.com/blevesearch/bleve/v2"
 	"github.com/julienschmidt/httprouter"
 )
 
-var log_stream = make(chan types.Log_format)
-
 type App struct {
 	index bleve.Index
+	queue queue.ChannelQueue
 }
 
 func Run() {
 	var wg sync.WaitGroup
+
+	logQueue := queue.NewChannelQueue()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -33,7 +34,7 @@ func Run() {
 		Addr: ":8081", Handler: router,
 	}
 
-	index, err := isIndexExists("index.log")
+	index, err := checkIndex("index.log")
 	if err != nil {
 		log.Fatal("Cannot create new Index")
 	}
@@ -41,6 +42,7 @@ func Run() {
 	app := App{}
 
 	app.index = index
+	app.queue = *logQueue
 	defer app.index.Close()
 
 	router.POST("/api/v1/log/ingest", app.ingester)
@@ -56,11 +58,16 @@ func Run() {
 	}()
 
 	go func() {
-		for log := range log_stream {
+		for {
+			logItem, err := logQueue.Dequeue()
+			if err != nil {
+				log.Printf("Stopped retrieving from queue. Info: %v", err)
+				return
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				app.indexer(log)
+				app.indexer(logItem)
 			}()
 		}
 	}()
@@ -75,7 +82,7 @@ func Run() {
 		log.Fatalf("Failed shutting down HTTP Server. Error: %v", err)
 	}
 
-	close(log_stream)
+	logQueue.Close()
 
 	wg.Wait()
 

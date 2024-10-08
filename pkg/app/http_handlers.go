@@ -17,8 +17,9 @@ func (app App) ingester(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	if err := json.NewDecoder(r.Body).Decode(&logs); err != nil {
 		log.Printf("Cannot decode log. Error: %v", err)
 	}
-
-	log_stream <- logs
+	if err := app.queue.Enqueue(logs); err != nil {
+		log.Printf("Cannot enqueue logs. Error: %v", err)
+	}
 
 	w.Write([]byte("OK"))
 }

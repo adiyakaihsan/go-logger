@@ -14,9 +14,10 @@ func (app App) indexer(logs types.Log_format) {
 	if err := app.index.Index(id, logs); err != nil {
 		log.Println("Cannot index data")
 	}
+	log.Printf("Index ID: %v", id)
 }
 
-func isIndexExists(indexPath string) (bleve.Index, error) {
+func checkIndex(indexPath string) (bleve.Index, error) {
 	var index bleve.Index
 	// Check if the index already exists
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
