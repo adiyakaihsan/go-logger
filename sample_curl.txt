@@ -1,4 +1,6 @@
 ingest
-curl localhost:8081/api/v1/log/ingest -d "{\"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\", \"level\": \"info\", \"message\": \"Starting server\"}"
+curl localhost:8081/api/v1/log/ingest -d "{\"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\", \"level\": \"info\", \"message\": \"Starting server okay okay\"}"
 
-curl localhost:8081/api/v1/log/search -d '{"query": "text"}'
+curl localhost:8081/api/v1/log/search -d '{"query": "kambing"}'
+
+curl -X DELETE localhost:8081/api/v1/log/delete 

@@ -2,12 +2,12 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
+	"time"
 
+	"github.com/adiyakaihsan/go-logger/pkg/config"
 	"github.com/adiyakaihsan/go-logger/pkg/types"
-	bleve "github.com/blevesearch/bleve/v2"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -30,16 +30,9 @@ func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	if err := json.NewDecoder(r.Body).Decode(&search_query); err != nil {
 		log.Printf("Cannot decode log. Error: %v", err)
 	}
-
-	query := bleve.NewQueryStringQuery(search_query.Query)
-	searchRequest := bleve.NewSearchRequest(query)
-
-	searchRequest.Fields = []string{"timestamp", "level", "message"}
-
-	searchResults, err := app.index.Search(searchRequest)
+	searchResults, err := app.searchWithQuery(search_query)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Printf("Cannot search with Query: %v, Error: %v", search_query.Query, err)
 	}
 
 	resultJSON, err := json.Marshal(searchResults)
@@ -53,4 +46,24 @@ func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	w.Header().Set("Content-Type", "application/json")
 
 	w.Write(resultJSON)
+}
+
+func (app App) delete(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	retentionPeriod := time.Now().Add(-1 * config.RetentionPeriod)
+
+	searchResults, err := app.searchWithRange(config.NilTime, retentionPeriod)
+	if err != nil {
+		return
+	}
+	if searchResults.Hits.Len() == 0 {
+		log.Printf("No document found with specified criteria")
+		return
+	}
+	for _, hit := range searchResults.Hits {
+		if err := app.index.Delete(hit.ID); err != nil {
+			log.Printf("Error deleting document ID: %v. Error: %v", hit.ID, err)
+		}
+		log.Printf("Successfully delete document ID: %v", hit.ID)
+	}
+
 }

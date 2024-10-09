@@ -47,6 +47,7 @@ func Run() {
 
 	router.POST("/api/v1/log/ingest", app.ingester)
 	router.POST("/api/v1/log/search", app.search)
+	router.DELETE("/api/v1/log/delete", app.delete)
 
 	log.Println("Starting server on port 8081. . . .")
 
