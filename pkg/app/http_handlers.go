@@ -33,6 +33,7 @@ func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	searchResults, err := app.searchWithQuery(search_query)
 	if err != nil {
 		log.Printf("Cannot search with Query: %v, Error: %v", search_query.Query, err)
+		return
 	}
 
 	resultJSON, err := json.Marshal(searchResults)
@@ -62,6 +63,7 @@ func (app App) delete(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	for _, hit := range searchResults.Hits {
 		if err := app.index.Delete(hit.ID); err != nil {
 			log.Printf("Error deleting document ID: %v. Error: %v", hit.ID, err)
+			return
 		}
 		log.Printf("Successfully delete document ID: %v", hit.ID)
 	}
