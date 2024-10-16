@@ -47,6 +47,8 @@ func Run() {
 		log.Printf("Error when updating index for search. Error: %v", err)
 	}
 
+	indexAlias.Add(index)
+
 	app := App{
         index: index,
         queue: *logQueue,
