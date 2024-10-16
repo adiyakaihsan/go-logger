@@ -7,22 +7,22 @@ import (
 )
 
 type ChannelQueue struct {
-	logStream chan types.Log_format
+	logStream chan types.LogFormat
 }
 
 
 func NewChannelQueue() *ChannelQueue {
 	return &ChannelQueue{
-		logStream: make(chan types.Log_format),
+		logStream: make(chan types.LogFormat),
 	}
 }
 
-func (cq *ChannelQueue) Enqueue(log types.Log_format) error {
+func (cq *ChannelQueue) Enqueue(log types.LogFormat) error {
 	cq.logStream <- log
 	return nil
 }
 
-func (cq *ChannelQueue) Dequeue() (types.Log_format, error) {
+func (cq *ChannelQueue) Dequeue() (types.LogFormat, error) {
 	log, ok := <- cq.logStream
 	if !ok {
 		return log, errors.New("Channel is closed")

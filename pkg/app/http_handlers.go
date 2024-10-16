@@ -12,7 +12,7 @@ import (
 )
 
 func (app App) ingester(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var logs types.Log_format
+	var logs types.LogFormat
 
 	if err := json.NewDecoder(r.Body).Decode(&logs); err != nil {
 		log.Printf("Cannot decode log. Error: %v", err)
@@ -25,7 +25,7 @@ func (app App) ingester(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 }
 
 func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var search_query types.Search_format
+	var search_query types.SearchFormat
 
 	if err := json.NewDecoder(r.Body).Decode(&search_query); err != nil {
 		log.Printf("Cannot decode log. Error: %v", err)
@@ -42,13 +42,14 @@ func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 		return
 	}
 
-	log.Print(searchResults)
+	// log.Print(searchResults)
 
 	w.Header().Set("Content-Type", "application/json")
 
 	w.Write(resultJSON)
 }
 
+// TO DO: can be deleted once we implement retention with index removal
 func (app App) delete(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	retentionPeriod := time.Now().Add(-1 * config.RetentionPeriod)
 

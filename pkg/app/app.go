@@ -18,6 +18,7 @@ import (
 type App struct {
 	index bleve.Index
 	queue queue.ChannelQueue
+	indexSearch bleve.IndexAlias
 }
 
 func Run() {
@@ -34,16 +35,26 @@ func Run() {
 		Addr: ":8081", Handler: router,
 	}
 
-	index, err := checkIndex("index.log")
-	if err != nil {
-		log.Fatal("Cannot create new Index")
+	//Init Index
+	index, err := checkIndex(hourlyIndexName("index"))
+    if err != nil {
+        log.Fatal("Cannot create new Index")
+    }
+	defer index.Close()
+	//Index Alias used by search
+	indexAlias := bleve.NewIndexAlias()
+	if err := updateIndexAlias(indexAlias); err != nil {
+		log.Printf("Error when updating index for search. Error: %v", err)
 	}
 
-	app := App{}
+	app := App{
+        index: index,
+        queue: *logQueue,
+		indexSearch: indexAlias,
+    }
 
-	app.index = index
-	app.queue = *logQueue
-	defer app.index.Close()
+	//Index rollover goroutine
+	go startHourlyIndexRollover(&app, "index")
 
 	router.POST("/api/v1/log/ingest", app.ingester)
 	router.POST("/api/v1/log/search", app.search)
@@ -65,6 +76,7 @@ func Run() {
 				log.Printf("Stopped retrieving from queue. Info: %v", err)
 				return
 			}
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()

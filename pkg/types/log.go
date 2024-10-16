@@ -1,13 +1,15 @@
 package types
 
-import "time"
+import (
+	"time"
+)
 
-type Log_format struct {
+type LogFormat struct {
 	Timestamp time.Time `json:"timestamp"`
 	Level     string    `json:"level"`
 	Message   string    `json:"message"`
 }
 
-type Search_format struct {
+type SearchFormat struct {
 	Query string `json:"query"`
 }

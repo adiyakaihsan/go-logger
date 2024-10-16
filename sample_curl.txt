@@ -1,6 +1,6 @@
 ingest
-curl localhost:8081/api/v1/log/ingest -d "{\"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\", \"level\": \"info\", \"message\": \"Starting server okay okay\"}"
+curl localhost:8081/api/v1/log/ingest -d "{\"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\", \"level\": \"info\", \"message\": \"some log message warning error\"}"
 
-curl localhost:8081/api/v1/log/search -d '{"query": "kambing"}'
+curl localhost:8081/api/v1/log/search -d '{"query": "error"}'
 
 curl -X DELETE localhost:8081/api/v1/log/delete 
