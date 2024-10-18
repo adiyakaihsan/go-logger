@@ -11,11 +11,13 @@ import (
 	"github.com/adiyakaihsan/go-logger/pkg/config"
 	"github.com/adiyakaihsan/go-logger/pkg/types"
 	bleve "github.com/blevesearch/bleve/v2"
+	gocron "github.com/go-co-op/gocron/v2"
 )
 
 type IndexLifecycleManager struct {
 	index       bleve.Index
 	indexSearch bleve.IndexAlias
+	scheduler   gocron.Scheduler
 }
 
 func NewIndexLifecycleManager() (*IndexLifecycleManager, error) {
@@ -33,9 +35,16 @@ func NewIndexLifecycleManager() (*IndexLifecycleManager, error) {
 	indexAlias.Add(index)
 	log.Printf("Added index: %v to Index Alias", index.Name())
 
+	// go startHourlyIndexRollover(&app, "index")
+	scheduler, err := gocron.NewScheduler()
+	if err != nil {
+		log.Fatal("Cannot create scheduler for ILM")
+	}
+
 	ilm := &IndexLifecycleManager{
 		index:       index,
 		indexSearch: indexAlias,
+		scheduler:   scheduler,
 	}
 
 	if err := ilm.getIndexAlias(); err != nil {
@@ -89,18 +98,38 @@ func (ilm *IndexLifecycleManager) getActiveIndex(indexPath string) (bleve.Index,
 	return index, nil
 }
 
-func (ilm *IndexLifecycleManager) indexRollover(app *App, baseIndexName string) {
+func (ilm *IndexLifecycleManager) StartScheduler(baseIndexName string) error {
+	_, err := ilm.scheduler.NewJob(
+		gocron.CronJob("0 * * * *", false),
+		gocron.NewTask(
+			ilm.indexRollover,
+			baseIndexName,
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("error scheduling job: %w", err)
+	}
+	ilm.scheduler.Start()
+	log.Printf("Started ILM scheduler.")
+	return nil
+}
+
+func (ilm *IndexLifecycleManager) StopScheduler() {
+	ilm.scheduler.Shutdown()
+}
+
+func (ilm *IndexLifecycleManager) indexRollover(baseIndexName string) {
 	// Close the old index and create a new one for the new hour
-	if err := app.ilm.index.Close(); err != nil {
+	if err := ilm.index.Close(); err != nil {
 		log.Printf("Cannot close index. Error: %v", err)
 	}
 
 	newIndexName := hourlyIndexName(baseIndexName)
-	newIndex, err := app.ilm.getActiveIndex(newIndexName)
+	newIndex, err := ilm.getActiveIndex(newIndexName)
 	if err != nil {
 		log.Printf("Cannot create new Index for %s", newIndexName)
 	}
-	app.ilm.index = newIndex
+	ilm.index = newIndex
 	//update indexAlias for search
 	ilm.indexSearch.Add(newIndex)
 

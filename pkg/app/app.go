@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/adiyakaihsan/go-logger/pkg/queue"
-	gocron "github.com/go-co-op/gocron/v2"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -43,27 +42,6 @@ func Run() {
 		queue: *logQueue,
 		ilm:   ilm,
 	}
-
-	//Index rollover goroutine
-	// go startHourlyIndexRollover(&app, "index")
-	schedule, err := gocron.NewScheduler()
-	if err != nil {
-		log.Fatal("Cannot create scheduler for ILM")
-	}
-
-	_, err = schedule.NewJob(
-		gocron.CronJob("0 * * * *", false),
-		gocron.NewTask(
-			app.ilm.indexRollover,
-			&app,
-			"index",
-		),
-	)
-	if err != nil {
-		log.Printf("Error scheduling job. Error: %v", err)
-	}
-	schedule.Start()
-	log.Printf("Started ILM scheduler.")
 
 	router.POST("/api/v1/log/ingest", app.ingester)
 	router.POST("/api/v1/log/search", app.search)
@@ -104,9 +82,7 @@ func Run() {
 		log.Fatalf("Failed shutting down HTTP Server. Error: %v", err)
 	}
 
-	if err := schedule.Shutdown(); err != nil {
-		log.Fatalf("Failed shutting down scheduler")
-	}
+	app.ilm.StopScheduler()
 
 	logQueue.Close()
 
