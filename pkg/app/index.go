@@ -52,31 +52,27 @@ func checkIndex(indexPath string) (bleve.Index, error) {
 		// defer index.Close()
 		log.Println("Index opened successfully.")
 	}
+	log.Printf("Current active index: %v", index.Name())
 	return index, nil
 }
-// TO DO: currently rollover every 60 minute starting script running. Need to adjust to run every hour (00:00, 01:00, etc.)
+
 func startHourlyIndexRollover(app *App, baseIndexName string) {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// Close the old index and create a new one for the new hour
-			app.index.Close()
-
-			newIndexName := hourlyIndexName(baseIndexName)
-			newIndex, err := checkIndex(newIndexName)
-			if err != nil {
-				log.Fatalf("Cannot create new Index for %s", newIndexName)
-			}
-			app.index = newIndex
-			//update indexAlias for search
-			app.indexSearch.Add(newIndex)
-
-			log.Printf("Rolled over to new index: %s", newIndexName)
-		}
+	// Close the old index and create a new one for the new hour
+	if err := app.index.Close(); err != nil {
+		log.Printf("Cannot close index. Error: %v", err)
 	}
+
+	newIndexName := hourlyIndexName(baseIndexName)
+	newIndex, err := checkIndex(newIndexName)
+	if err != nil {
+		log.Fatalf("Cannot create new Index for %s", newIndexName)
+	}
+	app.index = newIndex
+	//update indexAlias for search
+	app.indexSearch.Add(newIndex)
+
+	log.Printf("Rolled over to new index: %s", newIndexName)
+
 }
 
 func findAllIndexes() []string {
@@ -108,7 +104,7 @@ func openIndexWithTimeout(indexPath string, timeout time.Duration) (bleve.Index,
 		}
 		return index, err
 	case <-time.After(timeout):
-		return nil, fmt.Errorf("timeout opening index")
+		return nil, fmt.Errorf("time out opening index. index could be already opened")
 	}
 }
 
@@ -116,14 +112,14 @@ func updateIndexAlias(indexAlias bleve.IndexAlias) error {
 	indexList := findAllIndexes()
 
 	for _, index := range indexList {
-		id, err := openIndexWithTimeout(index, 5 * time.Second)
+		id, err := openIndexWithTimeout(index, 5*time.Second)
 		// log.Printf("var %v", id)
 		if err != nil {
 			log.Printf("Cannot open index. Error: %v", err)
 			return err
 		}
 		indexAlias.Add(id)
-		log.Printf("Added index %v to Index Alias %v", id.Name(), indexAlias.Name())
+		log.Printf("Added index: %v to Index Alias", id.Name())
 	}
 	return nil
 }
