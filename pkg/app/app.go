@@ -11,15 +11,13 @@ import (
 	"time"
 
 	"github.com/adiyakaihsan/go-logger/pkg/queue"
-	bleve "github.com/blevesearch/bleve/v2"
 	gocron "github.com/go-co-op/gocron/v2"
 	"github.com/julienschmidt/httprouter"
 )
 
 type App struct {
-	index       bleve.Index
-	queue       queue.ChannelQueue
-	indexSearch bleve.IndexAlias
+	queue queue.ChannelQueue
+	ilm   *IndexLifecycleManager
 }
 
 func Run() {
@@ -36,25 +34,14 @@ func Run() {
 		Addr: ":8081", Handler: router,
 	}
 
-	//Init Index
-	index, err := checkIndex(hourlyIndexName("index"))
+	ilm, err := NewIndexLifecycleManager()
 	if err != nil {
-		log.Fatal("Cannot create new Index")
+		log.Fatalf("Failed to initiate index. Error: %v", err)
 	}
-	defer index.Close()
-	//Index Alias used by search
-	indexAlias := bleve.NewIndexAlias()
-	if err := updateIndexAlias(indexAlias); err != nil {
-		log.Printf("Error when updating index for search. Error: %v", err)
-	}
-
-	indexAlias.Add(index)
-	log.Printf("Added index: %v to Index Alias", index.Name())
 
 	app := App{
-		index:       index,
-		queue:       *logQueue,
-		indexSearch: indexAlias,
+		queue: *logQueue,
+		ilm:   ilm,
 	}
 
 	//Index rollover goroutine
@@ -67,7 +54,7 @@ func Run() {
 	_, err = schedule.NewJob(
 		gocron.CronJob("0 * * * *", false),
 		gocron.NewTask(
-			startHourlyIndexRollover,
+			app.ilm.indexRollover,
 			&app,
 			"index",
 		),
@@ -102,7 +89,7 @@ func Run() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				app.indexer(logItem)
+				app.ilm.indexer(logItem)
 			}()
 		}
 	}()

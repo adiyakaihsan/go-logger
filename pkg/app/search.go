@@ -14,7 +14,7 @@ func (app App) searchWithRange(startTime time.Time, endTime time.Time) (*bleve.S
 
 	searchRequest := bleve.NewSearchRequest(rangeQuery)
 	searchRequest.Fields = []string{"timestamp", "level", "message"}
-	searchResults, err := app.indexSearch.Search(searchRequest)
+	searchResults, err := app.ilm.indexSearch.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (app App) searchWithQuery(searchQuery types.SearchFormat) (*bleve.SearchRes
 	searchRequest.Fields = []string{"timestamp", "level", "message"}
 
 	//search Index Alias indexSearch
-	searchResults, err := app.indexSearch.Search(searchRequest)
+	searchResults, err := app.ilm.indexSearch.Search(searchRequest)
 	if err != nil {
 		return nil, err
 	}

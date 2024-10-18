@@ -13,10 +13,43 @@ import (
 	bleve "github.com/blevesearch/bleve/v2"
 )
 
-func (app App) indexer(logs types.LogFormat) {
+type IndexLifecycleManager struct {
+	index       bleve.Index
+	indexSearch bleve.IndexAlias
+}
+
+func NewIndexLifecycleManager() (*IndexLifecycleManager, error) {
+	//Init Index
+	baseIndexName := "index"
+	indexPath := hourlyIndexName(baseIndexName)
+
+	index, err := (&IndexLifecycleManager{}).getActiveIndex(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active index: %w", err)
+	}
+	//Index Alias used by search
+	indexAlias := bleve.NewIndexAlias()
+
+	indexAlias.Add(index)
+	log.Printf("Added index: %v to Index Alias", index.Name())
+
+	ilm := &IndexLifecycleManager{
+		index:       index,
+		indexSearch: indexAlias,
+	}
+
+	if err := ilm.getIndexAlias(); err != nil {
+		log.Printf("failed to get index alias: %v", err)
+	}
+
+	return ilm, nil
+
+}
+
+func (ilm *IndexLifecycleManager) indexer(logs types.LogFormat) {
 	log.Println("Indexing")
 	id := logs.Timestamp.Format("20060102150405.000")
-	if err := app.index.Index(id, logs); err != nil {
+	if err := ilm.index.Index(id, logs); err != nil {
 		log.Println("Cannot index data")
 	}
 	log.Printf("Index ID: %v", id)
@@ -27,7 +60,7 @@ func hourlyIndexName(baseName string) string {
 	return fmt.Sprintf("%s-%s.log", baseName, currentHour)
 }
 
-func checkIndex(indexPath string) (bleve.Index, error) {
+func (ilm *IndexLifecycleManager) getActiveIndex(indexPath string) (bleve.Index, error) {
 	var index bleve.Index
 	// Check if the index already exists
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
@@ -36,7 +69,7 @@ func checkIndex(indexPath string) (bleve.Index, error) {
 		mapping := bleve.NewIndexMapping()
 		index, err = bleve.New(indexPath, mapping)
 		if err != nil {
-			log.Fatalf("Cannot create new index: %v", err)
+			log.Printf("Cannot create new index: %v", err)
 			return nil, err
 		}
 		// defer index.Close()
@@ -56,20 +89,20 @@ func checkIndex(indexPath string) (bleve.Index, error) {
 	return index, nil
 }
 
-func startHourlyIndexRollover(app *App, baseIndexName string) {
+func (ilm *IndexLifecycleManager) indexRollover(app *App, baseIndexName string) {
 	// Close the old index and create a new one for the new hour
-	if err := app.index.Close(); err != nil {
+	if err := app.ilm.index.Close(); err != nil {
 		log.Printf("Cannot close index. Error: %v", err)
 	}
 
 	newIndexName := hourlyIndexName(baseIndexName)
-	newIndex, err := checkIndex(newIndexName)
+	newIndex, err := app.ilm.getActiveIndex(newIndexName)
 	if err != nil {
-		log.Fatalf("Cannot create new Index for %s", newIndexName)
+		log.Printf("Cannot create new Index for %s", newIndexName)
 	}
-	app.index = newIndex
+	app.ilm.index = newIndex
 	//update indexAlias for search
-	app.indexSearch.Add(newIndex)
+	ilm.indexSearch.Add(newIndex)
 
 	log.Printf("Rolled over to new index: %s", newIndexName)
 
@@ -108,7 +141,7 @@ func openIndexWithTimeout(indexPath string, timeout time.Duration) (bleve.Index,
 	}
 }
 
-func updateIndexAlias(indexAlias bleve.IndexAlias) error {
+func (ilm IndexLifecycleManager) getIndexAlias() error {
 	indexList := findAllIndexes()
 
 	for _, index := range indexList {
@@ -116,9 +149,9 @@ func updateIndexAlias(indexAlias bleve.IndexAlias) error {
 		// log.Printf("var %v", id)
 		if err != nil {
 			log.Printf("Cannot open index. Error: %v", err)
-			return err
+			continue
 		}
-		indexAlias.Add(id)
+		ilm.indexSearch.Add(id)
 		log.Printf("Added index: %v to Index Alias", id.Name())
 	}
 	return nil

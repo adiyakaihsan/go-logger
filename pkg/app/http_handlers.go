@@ -62,7 +62,7 @@ func (app App) delete(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 		return
 	}
 	for _, hit := range searchResults.Hits {
-		if err := app.index.Delete(hit.ID); err != nil {
+		if err := app.ilm.index.Delete(hit.ID); err != nil {
 			log.Printf("Error deleting document ID: %v. Error: %v", hit.ID, err)
 			return
 		}
