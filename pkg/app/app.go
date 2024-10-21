@@ -33,7 +33,7 @@ func Run() {
 		Addr: ":8081", Handler: router,
 	}
 
-	ilm, err := NewIndexLifecycleManager()
+	ilm, err := NewIndexLifecycleManager("index")
 	if err != nil {
 		log.Fatalf("Failed to initiate index. Error: %v", err)
 	}
@@ -43,7 +43,7 @@ func Run() {
 		ilm:   ilm,
 	}
 
-	app.ilm.StartScheduler("index")
+	app.ilm.StartScheduler()
 
 	router.POST("/api/v1/log/ingest", app.ingester)
 	router.POST("/api/v1/log/search", app.search)

@@ -8,31 +8,40 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adiyakaihsan/go-logger/pkg/config"
 	"github.com/adiyakaihsan/go-logger/pkg/types"
 	bleve "github.com/blevesearch/bleve/v2"
 	gocron "github.com/go-co-op/gocron/v2"
 )
 
 type IndexLifecycleManager struct {
-	index       bleve.Index
-	indexSearch bleve.IndexAlias
-	scheduler   gocron.Scheduler
+	index         bleve.Index
+	indexSearch   bleve.IndexAlias
+	scheduler     gocron.Scheduler
+	baseIndexName string
 }
 
-func NewIndexLifecycleManager() (*IndexLifecycleManager, error) {
+func NewIndexLifecycleManager(baseIndexName string) (*IndexLifecycleManager, error) {
 	//Init Index
-	baseIndexName := "index"
-	indexPath := hourlyIndexName(baseIndexName)
+	// baseIndexName := "index"
 
-	index, err := (&IndexLifecycleManager{}).getActiveIndex(indexPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get active index: %w", err)
-	}
 	//Index Alias used by search
 	indexAlias := bleve.NewIndexAlias()
 
-	indexAlias.Add(index)
+	ilm := &IndexLifecycleManager{
+		indexSearch:   indexAlias,
+		baseIndexName: baseIndexName,
+	}
+
+	indexPath := ilm.hourlyIndexName()
+
+	index, err := ilm.getActiveIndex(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active index: %w", err)
+	}
+
+	ilm.index = index
+
+	ilm.indexSearch.Add(index)
 	log.Printf("Added index: %v to Index Alias", index.Name())
 
 	// go startHourlyIndexRollover(&app, "index")
@@ -40,12 +49,7 @@ func NewIndexLifecycleManager() (*IndexLifecycleManager, error) {
 	if err != nil {
 		log.Fatal("Cannot create scheduler for ILM")
 	}
-
-	ilm := &IndexLifecycleManager{
-		index:       index,
-		indexSearch: indexAlias,
-		scheduler:   scheduler,
-	}
+	ilm.scheduler = scheduler
 
 	if err := ilm.getIndexAlias(); err != nil {
 		log.Printf("failed to get index alias: %v", err)
@@ -64,9 +68,9 @@ func (ilm *IndexLifecycleManager) indexer(logs types.LogFormat) {
 	log.Printf("Index ID: %v", id)
 }
 
-func hourlyIndexName(baseName string) string {
+func (ilm *IndexLifecycleManager) hourlyIndexName() string {
 	currentHour := time.Now().Format("2006-01-02-15") // Year-Month-Day-Hour format
-	return fmt.Sprintf("%s-%s.log", baseName, currentHour)
+	return fmt.Sprintf("%s-%s.log", ilm.baseIndexName, currentHour)
 }
 
 func (ilm *IndexLifecycleManager) getActiveIndex(indexPath string) (bleve.Index, error) {
@@ -98,12 +102,12 @@ func (ilm *IndexLifecycleManager) getActiveIndex(indexPath string) (bleve.Index,
 	return index, nil
 }
 
-func (ilm *IndexLifecycleManager) StartScheduler(baseIndexName string) error {
+func (ilm *IndexLifecycleManager) StartScheduler() error {
 	_, err := ilm.scheduler.NewJob(
 		gocron.CronJob("0 * * * *", false),
 		gocron.NewTask(
 			ilm.indexRollover,
-			baseIndexName,
+			ilm.baseIndexName,
 		),
 	)
 	if err != nil {
@@ -124,7 +128,7 @@ func (ilm *IndexLifecycleManager) indexRollover(baseIndexName string) {
 		log.Printf("Cannot close index. Error: %v", err)
 	}
 
-	newIndexName := hourlyIndexName(baseIndexName)
+	newIndexName := ilm.hourlyIndexName()
 	newIndex, err := ilm.getActiveIndex(newIndexName)
 	if err != nil {
 		log.Printf("Cannot create new Index for %s", newIndexName)
@@ -137,9 +141,9 @@ func (ilm *IndexLifecycleManager) indexRollover(baseIndexName string) {
 
 }
 
-func findAllIndexes() []string {
+func (ilm *IndexLifecycleManager) findAllIndexes() []string {
 	var indexList []string
-	matches, err := filepath.Glob(config.BaseIndexName)
+	matches, err := filepath.Glob(fmt.Sprintf("%v*.log", ilm.baseIndexName))
 	if err != nil {
 		log.Fatal(err)
 		return indexList
@@ -171,7 +175,7 @@ func openIndexWithTimeout(indexPath string, timeout time.Duration) (bleve.Index,
 }
 
 func (ilm IndexLifecycleManager) getIndexAlias() error {
-	indexList := findAllIndexes()
+	indexList := ilm.findAllIndexes()
 
 	for _, index := range indexList {
 		id, err := openIndexWithTimeout(index, 5*time.Second)
