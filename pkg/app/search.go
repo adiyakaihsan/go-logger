@@ -25,6 +25,7 @@ func (app App) searchWithRange(startTime time.Time, endTime time.Time) (*bleve.S
 func (app App) searchWithQuery(searchQuery types.SearchFormat) (*bleve.SearchResult, error) {
 	query := bleve.NewQueryStringQuery(searchQuery.Query)
 	searchRequest := bleve.NewSearchRequest(query)
+	searchRequest.Size = 100
 
 	searchRequest.Fields = []string{"timestamp", "level", "message"}
 
