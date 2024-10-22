@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -15,39 +15,82 @@ import (
 )
 
 type App struct {
-	queue queue.ChannelQueue
-	ilm   *IndexLifecycleManager
+	queue     queue.ChannelQueue
+	ilm       *IndexLifecycleManager
+	processor *LogProcessor
+}
+
+type Config struct {
+	IndexName     string
+	ShutdownTimer time.Duration
+}
+
+func NewApp(cfg Config) (*App, error) {
+	logQueue := queue.NewChannelQueue()
+
+	ilm, err := NewIndexLifecycleManager(cfg.IndexName)
+	if err != nil {
+		log.Fatalf("Failed to initiate index. Error: %v", err)
+	}
+
+	processor := NewLogProcessor(*logQueue, ilm)
+
+	app := &App{
+		queue:     *logQueue,
+		ilm:       ilm,
+		processor: processor,
+	}
+
+	return app, nil
+}
+
+func (a *App) Start() error {
+	a.ilm.StartScheduler()
+
+	if err := a.processor.Start(); err != nil {
+		return fmt.Errorf("failed to start log processor: %w", err)
+	}
+	return nil
+}
+
+func (a *App) Shutdown() error {
+	a.ilm.StopScheduler()
+	a.queue.Close()
+	if err := a.processor.Shutdown(); err != nil {
+		return fmt.Errorf("processor shutdown failed: %w", err)
+	}
+
+	return nil
 }
 
 func Run() {
-	var wg sync.WaitGroup
+	cfg := Config{
+		IndexName:     "index",
+		ShutdownTimer: 5 * time.Second,
+	}
 
-	logQueue := queue.NewChannelQueue()
+	application, err := NewApp(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize app: %v", err)
+	}
+
+	if err := application.Start(); err != nil {
+		log.Fatalf("Failed to start app: %v", err)
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	//HTTP Server
 	router := httprouter.New()
 
 	server := &http.Server{
 		Addr: ":8081", Handler: router,
 	}
 
-	ilm, err := NewIndexLifecycleManager("index")
-	if err != nil {
-		log.Fatalf("Failed to initiate index. Error: %v", err)
-	}
-
-	app := App{
-		queue: *logQueue,
-		ilm:   ilm,
-	}
-
-	app.ilm.StartScheduler()
-
-	router.POST("/api/v1/log/ingest", app.ingester)
-	router.POST("/api/v1/log/search", app.search)
-	router.DELETE("/api/v1/log/delete", app.delete)
+	router.POST("/api/v1/log/ingest", application.ingester)
+	router.POST("/api/v1/log/search", application.search)
+	router.DELETE("/api/v1/log/delete", application.delete)
 
 	log.Println("Starting server on port 8081. . . .")
 
@@ -58,37 +101,21 @@ func Run() {
 		}
 	}()
 
-	go func() {
-		for {
-			logItem, err := logQueue.Dequeue()
-			if err != nil {
-				log.Printf("Stopped retrieving from queue. Info: %v", err)
-				return
-			}
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				app.ilm.indexWithRetry(logItem)
-			}()
-		}
-	}()
-
+	//Catch kill signal for graceful shutdown
 	sig := <-sigChan
 	log.Printf("Caught signal: %v", sig)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimer)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Failed shutting down HTTP Server. Error: %v", err)
 	}
+	log.Println("HTTP Server shutdown")
 
-	app.ilm.StopScheduler()
-
-	logQueue.Close()
-
-	wg.Wait()
+	if err := application.Shutdown(); err != nil {
+		log.Fatalf("Failed to shutdown gracefully: %v", err)
+	}
 
 	log.Println("All log processed. Shutting down . . . ")
 
