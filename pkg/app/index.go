@@ -75,7 +75,7 @@ func (ilm *IndexLifecycleManager) indexWithRetry(logs types.LogFormat) {
 	}
 }
 
-func (ilm *IndexLifecycleManager) hourlyIndexName() string {
+func (ilm *IndexLifecycleManager) getHourlyIndexName() string {
 	currentHour := time.Now().Format("2006-01-02-15") // Year-Month-Day-Hour format
 	return fmt.Sprintf("%s-%s.log", ilm.baseIndexName, currentHour)
 }
@@ -83,7 +83,7 @@ func (ilm *IndexLifecycleManager) hourlyIndexName() string {
 func (ilm *IndexLifecycleManager) getActiveIndex() (bleve.Index, error) {
 	var index bleve.Index
 
-	indexPath := ilm.hourlyIndexName()
+	indexPath := ilm.getHourlyIndexName()
 
 	// Check if the index already exists
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {

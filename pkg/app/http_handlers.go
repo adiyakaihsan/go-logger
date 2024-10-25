@@ -25,14 +25,14 @@ func (app App) ingester(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 }
 
 func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var search_query types.SearchFormat
+	var searchQuery types.SearchFormat
 
-	if err := json.NewDecoder(r.Body).Decode(&search_query); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&searchQuery); err != nil {
 		log.Printf("Cannot decode log. Error: %v", err)
 	}
-	searchResults, err := app.searchWithQuery(search_query)
+	searchResults, err := app.searchWithQuery(searchQuery)
 	if err != nil {
-		log.Printf("Cannot search with Query: %v, Error: %v", search_query.Query, err)
+		log.Printf("Cannot search with Query: %v, Error: %v", searchQuery.Query, err)
 		return
 	}
 
@@ -41,8 +41,6 @@ func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 		http.Error(w, "Failed to marshal search results", http.StatusInternalServerError)
 		return
 	}
-
-	// log.Print(searchResults)
 
 	w.Header().Set("Content-Type", "application/json")
 
