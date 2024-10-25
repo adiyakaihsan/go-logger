@@ -16,7 +16,6 @@ type App struct {
 	queue     queue.ChannelQueue
 	ilm       *IndexLifecycleManager
 	processor *LogProcessor
-	server    *Server
 }
 
 type Config struct {
@@ -33,25 +32,15 @@ func NewApp(cfg Config) (*App, error) {
 		log.Fatalf("Failed to initiate index. Error: %v", err)
 	}
 
-	server := NewServer(cfg.Port)
-
 	processor := NewLogProcessor(*logQueue, ilm)
 
 	app := &App{
 		queue:     *logQueue,
 		ilm:       ilm,
 		processor: processor,
-		server:    server,
 	}
-	app.registerRoutes()
 
 	return app, nil
-}
-
-func (a *App) registerRoutes() {
-	a.server.router.POST("/api/v1/log/ingest", a.ingester)
-	a.server.router.POST("/api/v1/log/search", a.search)
-	a.server.router.DELETE("/api/v1/log/delete", a.delete)
 }
 
 func (a *App) Start() error {
@@ -61,17 +50,10 @@ func (a *App) Start() error {
 		return fmt.Errorf("failed to start log processor: %w", err)
 	}
 
-	if err := a.server.Start(); err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
-	}
 	return nil
 }
 
-func (a *App) Shutdown(ctx context.Context) error {
-	if err := a.server.Shutdown(ctx); err != nil {
-		return fmt.Errorf("server shutdown failed: %w", err)
-	}
-
+func (a *App) Shutdown() error {
 	a.ilm.StopScheduler()
 	a.queue.Close()
 	if err := a.processor.Shutdown(); err != nil {
@@ -88,12 +70,9 @@ func Run() {
 		Port:          "8081",
 	}
 
-	application, err := NewApp(cfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize app: %v", err)
-	}
+	server := NewServer(cfg)
 
-	if err := application.Start(); err != nil {
+	if err := server.Start(); err != nil {
 		log.Fatalf("Failed to start app: %v", err)
 	}
 
@@ -107,7 +86,7 @@ func Run() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimer)
 	defer cancel()
 
-	if err := application.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Failed to shutdown gracefully: %v", err)
 	}
 

@@ -12,17 +12,31 @@ import (
 type Server struct {
 	server *http.Server
 	router *httprouter.Router
+	app    *App
 }
 
-func NewServer(port string) *Server {
+func NewServer(cfg Config) *Server {
 	router := httprouter.New()
-	return &Server{
+	app, err := NewApp(cfg)
+	if err != nil {
+		log.Fatalf("Cannot instantiate App. Error: %v", err)
+	}
+	server := &Server{
 		router: router,
 		server: &http.Server{
-			Addr:    fmt.Sprintf(":%s", port),
+			Addr:    fmt.Sprintf(":%s", cfg.Port),
 			Handler: router,
 		},
+		app: app,
 	}
+	server.registerRoutes()
+	return server
+}
+
+func (s *Server) registerRoutes() {
+	s.router.POST("/api/v1/log/ingest", s.app.ingester)
+	s.router.POST("/api/v1/log/search", s.app.search)
+	s.router.DELETE("/api/v1/log/delete", s.app.delete)
 }
 
 func (s *Server) Start() error {
@@ -32,9 +46,14 @@ func (s *Server) Start() error {
 			log.Printf("HTTP server error: %v", err)
 		}
 	}()
+
+	//start App
+	s.app.Start()
 	return nil
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	// shutdown App
+	s.app.Shutdown()
 	return s.server.Shutdown(ctx)
 }

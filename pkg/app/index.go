@@ -60,7 +60,7 @@ func NewIndexLifecycleManager(baseIndexName string) (*IndexLifecycleManager, err
 func (ilm *IndexLifecycleManager) indexWithRetry(logs types.LogFormat) {
 	var maxRetries = 3
 	var retryInterval = 5 * time.Second
-	
+
 	log.Println("Indexing")
 	id := logs.Timestamp.Format("20060102150405.000")
 	for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -71,10 +71,8 @@ func (ilm *IndexLifecycleManager) indexWithRetry(logs types.LogFormat) {
 		}
 		log.Printf("Cannot index data. Error: %v", err)
 		time.Sleep(retryInterval)
-		
+
 	}
-	
-	
 }
 
 func (ilm *IndexLifecycleManager) hourlyIndexName() string {
