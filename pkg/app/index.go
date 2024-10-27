@@ -157,11 +157,6 @@ func (ilm *IndexLifecycleManager) StopScheduler() {
 }
 
 func (ilm *IndexLifecycleManager) indexRollover(baseIndexName string) {
-	// Close the old index and create a new one for the new hour
-	if err := ilm.index.Close(); err != nil {
-		log.Printf("Cannot close index. Error: %v", err)
-	}
-
 	newIndex, err := ilm.getActiveIndex()
 	if err != nil {
 		log.Printf("Cannot create new Index. Error: %v", err)
