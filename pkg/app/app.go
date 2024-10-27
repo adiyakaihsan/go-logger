@@ -20,6 +20,7 @@ type App struct {
 
 type Config struct {
 	IndexName     string
+	RetentionDays time.Duration
 	ShutdownTimer time.Duration
 	Port          string
 }
@@ -27,7 +28,7 @@ type Config struct {
 func NewApp(cfg Config) (*App, error) {
 	logQueue := queue.NewChannelQueue()
 
-	ilm, err := NewIndexLifecycleManager(cfg.IndexName)
+	ilm, err := NewIndexLifecycleManager(cfg.IndexName, cfg.RetentionDays)
 	if err != nil {
 		log.Fatalf("Failed to initiate index. Error: %v", err)
 	}
@@ -44,7 +45,9 @@ func NewApp(cfg Config) (*App, error) {
 }
 
 func (a *App) Start() error {
-	a.ilm.StartScheduler()
+	if err := a.ilm.StartScheduler(); err != nil {
+		log.Printf("Error starting ILM Scheduler. Error: %v", err)
+	}
 
 	if err := a.processor.Start(); err != nil {
 		return fmt.Errorf("failed to start log processor: %w", err)
@@ -66,6 +69,7 @@ func (a *App) Shutdown() error {
 func Run() {
 	cfg := Config{
 		IndexName:     "index",
+		RetentionDays: 12 * 24 * time.Hour,
 		ShutdownTimer: 5 * time.Second,
 		Port:          "8081",
 	}

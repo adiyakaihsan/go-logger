@@ -36,7 +36,6 @@ func NewServer(cfg Config) *Server {
 func (s *Server) registerRoutes() {
 	s.router.POST("/api/v1/log/ingest", s.app.ingester)
 	s.router.POST("/api/v1/log/search", s.app.search)
-	s.router.DELETE("/api/v1/log/delete", s.app.delete)
 }
 
 func (s *Server) Start() error {

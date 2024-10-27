@@ -2,25 +2,25 @@ package app
 
 import (
 	"log"
-	"time"
 
 	"github.com/adiyakaihsan/go-logger/pkg/types"
 	bleve "github.com/blevesearch/bleve/v2"
 )
 
-func (app App) searchWithRange(startTime time.Time, endTime time.Time) (*bleve.SearchResult, error) {
-	rangeQuery := bleve.NewDateRangeQuery(startTime, endTime)
-	rangeQuery.SetField("timestamp")
+// TO DO: Add handler to handle search with time range
+// func (app App) searchWithRange(startTime time.Time, endTime time.Time) (*bleve.SearchResult, error) {
+// 	rangeQuery := bleve.NewDateRangeQuery(startTime, endTime)
+// 	rangeQuery.SetField("timestamp")
 
-	searchRequest := bleve.NewSearchRequest(rangeQuery)
-	searchRequest.Fields = []string{"timestamp", "level", "message"}
-	searchResults, err := app.ilm.indexSearch.Search(searchRequest)
-	if err != nil {
-		return nil, err
-	}
-	return searchResults, nil
+// 	searchRequest := bleve.NewSearchRequest(rangeQuery)
+// 	searchRequest.Fields = []string{"timestamp", "level", "message"}
+// 	searchResults, err := app.ilm.indexSearch.Search(searchRequest)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return searchResults, nil
 
-}
+// }
 
 func (app App) searchWithQuery(searchQuery types.SearchFormat) (*bleve.SearchResult, error) {
 	query := bleve.NewQueryStringQuery(searchQuery.Query)

@@ -1,10 +1,13 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,18 +21,28 @@ type IndexLifecycleManager struct {
 	indexSearch   bleve.IndexAlias
 	scheduler     gocron.Scheduler
 	baseIndexName string
+	searchManager *SearchManager
+	retentionDays time.Duration
 }
 
-func NewIndexLifecycleManager(baseIndexName string) (*IndexLifecycleManager, error) {
-	//Init Index
-	// baseIndexName := "index"
+type SearchManager struct {
+	alias   bleve.IndexAlias
+	indices map[string]bleve.Index
+}
 
+func NewIndexLifecycleManager(baseIndexName string, retentionDays time.Duration) (*IndexLifecycleManager, error) {
 	//Index Alias used by search
 	indexAlias := bleve.NewIndexAlias()
 
+	sm := &SearchManager{
+		alias:   indexAlias,
+		indices: map[string]bleve.Index{},
+	}
 	ilm := &IndexLifecycleManager{
 		indexSearch:   indexAlias,
 		baseIndexName: baseIndexName,
+		searchManager: sm,
+		retentionDays: retentionDays,
 	}
 
 	index, err := ilm.getActiveIndex()
@@ -113,6 +126,7 @@ func (ilm *IndexLifecycleManager) getActiveIndex() (bleve.Index, error) {
 }
 
 func (ilm *IndexLifecycleManager) StartScheduler() error {
+	// Job for index rollover
 	_, err := ilm.scheduler.NewJob(
 		gocron.CronJob("0 * * * *", false),
 		gocron.NewTask(
@@ -123,8 +137,18 @@ func (ilm *IndexLifecycleManager) StartScheduler() error {
 	if err != nil {
 		return fmt.Errorf("error scheduling job: %w", err)
 	}
+	// Job for index retention lifecycle
+	_, err = ilm.scheduler.NewJob(
+		gocron.CronJob("0 * * * *", false),
+		gocron.NewTask(ilm.indexCleanUp),
+	)
+	if err != nil {
+		return fmt.Errorf("error scheduling job: %w", err)
+	}
+
 	ilm.scheduler.Start()
 	log.Printf("Started ILM scheduler.")
+
 	return nil
 }
 
@@ -145,9 +169,60 @@ func (ilm *IndexLifecycleManager) indexRollover(baseIndexName string) {
 	ilm.index = newIndex
 	//update indexAlias for search
 	ilm.indexSearch.Add(newIndex)
+	ilm.searchManager.indices[newIndex.Name()] = newIndex
 
 	log.Printf("Rolled over to new index: %s", newIndex.Name())
 
+}
+
+func isOlderThan(filename string, age time.Duration) (bool, error) {
+	// Regular expression to extract date components
+	re := regexp.MustCompile(`index-(\d{4})-(\d{2})-(\d{2})-\d{2}`)
+	matches := re.FindStringSubmatch(filename)
+
+	if len(matches) != 4 {
+		return false, errors.New("invalid filename format")
+	}
+
+	// Parse year, month, and day from matches
+	year, _ := strconv.Atoi(matches[1])
+	month, _ := strconv.Atoi(matches[2])
+	day, _ := strconv.Atoi(matches[3])
+
+	// Create time.Time object for the extracted date
+	fileDate := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+
+	// Get current time
+	now := time.Now().UTC()
+
+	// Calculate the difference
+	difference := now.Sub(fileDate)
+
+	return difference > age, nil
+}
+
+func (ilm *IndexLifecycleManager) indexCleanUp() error {
+	for _, index := range ilm.searchManager.indices {
+		delete, err := isOlderThan(index.Name(), ilm.retentionDays)
+		if err != nil {
+			log.Printf("Cannot compare %v age. Error: %v", index.Name(), err)
+			return err
+		}
+		if delete {
+			log.Printf("Removing %v from index alias.", index.Name())
+			ilm.indexSearch.Remove(index)
+
+			log.Printf("Closing index %v", index.Name())
+			index.Close()
+
+			log.Printf("Removing %v index file from system.", index.Name())
+			if err := os.RemoveAll(index.Name()); err != nil {
+				log.Printf("Cannot remove delete %v. Error: %v", index.Name(), err)
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (ilm *IndexLifecycleManager) findAllIndexes() []string {
@@ -194,6 +269,7 @@ func (ilm IndexLifecycleManager) getIndexAlias() error {
 			continue
 		}
 		ilm.indexSearch.Add(id)
+		ilm.searchManager.indices[id.Name()] = id
 		log.Printf("Added index: %v to Index Alias", id.Name())
 	}
 	return nil

@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 
-	"github.com/adiyakaihsan/go-logger/pkg/config"
 	"github.com/adiyakaihsan/go-logger/pkg/types"
 	"github.com/julienschmidt/httprouter"
 )
@@ -45,26 +43,4 @@ func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	w.Header().Set("Content-Type", "application/json")
 
 	w.Write(resultJSON)
-}
-
-// TO DO: can be deleted once we implement retention with index removal
-func (app App) delete(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	retentionPeriod := time.Now().Add(-1 * config.RetentionPeriod)
-
-	searchResults, err := app.searchWithRange(config.NilTime, retentionPeriod)
-	if err != nil {
-		return
-	}
-	if searchResults.Hits.Len() == 0 {
-		log.Printf("No document found with specified criteria")
-		return
-	}
-	for _, hit := range searchResults.Hits {
-		if err := app.ilm.index.Delete(hit.ID); err != nil {
-			log.Printf("Error deleting document ID: %v. Error: %v", hit.ID, err)
-			return
-		}
-		log.Printf("Successfully delete document ID: %v", hit.ID)
-	}
-
 }
