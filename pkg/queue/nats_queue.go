@@ -2,6 +2,7 @@ package queue
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -70,7 +71,11 @@ func (nq *NatsQueue) Enqueue(lg types.LogFormat) error {
 }
 
 func (nq *NatsQueue) Dequeue() (types.LogFormat, error) {
-	msg := <-nq.msgChan
+	msg, ok := <-nq.msgChan
+	if !ok {
+		log.Println("Channel is closed")
+		return types.LogFormat{}, errors.New("channel is closed")
+	}
 
 	var logFormat types.LogFormat
 	if err := json.Unmarshal(msg.Data, &logFormat); err != nil {
