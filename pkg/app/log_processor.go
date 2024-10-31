@@ -8,12 +8,12 @@ import (
 )
 
 type LogProcessor struct {
-	queue queue.ChannelQueue
+	queue queue.Queue
 	ilm   *IndexLifecycleManager
 	wg    sync.WaitGroup
 }
 
-func NewLogProcessor(queue queue.ChannelQueue, ilm *IndexLifecycleManager) *LogProcessor {
+func NewLogProcessor(queue queue.Queue, ilm *IndexLifecycleManager) *LogProcessor {
 	return &LogProcessor{
 		queue: queue,
 		ilm:   ilm,

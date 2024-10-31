@@ -13,7 +13,7 @@ import (
 )
 
 type App struct {
-	queue     queue.ChannelQueue
+	queue     queue.Queue
 	ilm       *IndexLifecycleManager
 	processor *LogProcessor
 }
@@ -26,17 +26,20 @@ type Config struct {
 }
 
 func NewApp(cfg Config) (*App, error) {
-	logQueue := queue.NewChannelQueue()
+	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue")
+	if err != nil {
+		log.Fatalf("Failed to initiate channel. Error: %v", err)
+	}
 
 	ilm, err := NewIndexLifecycleManager(cfg.IndexName, cfg.RetentionDays)
 	if err != nil {
 		log.Fatalf("Failed to initiate index. Error: %v", err)
 	}
 
-	processor := NewLogProcessor(*logQueue, ilm)
+	processor := NewLogProcessor(logQueue, ilm)
 
 	app := &App{
-		queue:     *logQueue,
+		queue:     logQueue,
 		ilm:       ilm,
 		processor: processor,
 	}
