@@ -16,10 +16,10 @@ type NatsQueue struct {
 	queueName string
 	msgChan   chan *nats.Msg
 	sub       *nats.Subscription
-	// js        nats.JetStreamContext
+	js        nats.JetStreamContext
 }
 
-func NewNatsQueue(url, subject, queueName string) (*NatsQueue, error) {
+func NewNatsQueue(url, subject, queueName string, jsEnabled bool) (*NatsQueue, error) {
 	opts := []nats.Option{
 		nats.Timeout(5 * time.Second),   // Connection timeout
 		nats.ReconnectWait(time.Second), // Wait 1 second before reconnect
@@ -40,20 +40,56 @@ func NewNatsQueue(url, subject, queueName string) (*NatsQueue, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Connected to NATS")
+	var js nats.JetStreamContext
+	var sub *nats.Subscription
+	if jsEnabled {
+		js, err = nc.JetStream()
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("Initialized Jetstream")
+
+		_, err = js.AddStream(&nats.StreamConfig{
+			Name:     queueName,
+			Subjects: []string{subject},
+		})
+		if err != nil && err != nats.ErrStreamNameAlreadyInUse {
+			log.Fatal("Error adding stream:", err)
+		}
+		log.Printf("Created Stream")
+
+	}
 
 	nq := &NatsQueue{
 		conn:      nc,
 		subject:   subject,
 		queueName: queueName,
 		msgChan:   make(chan *nats.Msg),
-		// js: js,
+		// stream:    stream,
+		// consumer:  consumer,
+		js: js,
+		// sub: sub,
 	}
-	sub, err := nq.conn.QueueSubscribe(nq.subject, nq.queueName, func(msg *nats.Msg) {
-		nq.msgChan <- msg
-	})
-	if err != nil {
-		nq.conn.Close()
-		return nil, err
+
+	if jsEnabled {
+		sub, err = nq.js.Subscribe(nq.subject, func(msg *nats.Msg) {
+			nq.msgChan <- msg
+			msg.Ack() // Manually acknowledge the message
+		}, nats.Durable("my-durable-consumer"), nats.ManualAck(), nats.AckWait(30*time.Second))
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Subscribed to subject")
+	} else {
+		sub, err = nq.conn.QueueSubscribe(nq.subject, nq.queueName, func(msg *nats.Msg) {
+			nq.msgChan <- msg
+		})
+		if err != nil {
+			nq.conn.Close()
+			return nil, err
+		}
 	}
 	nq.sub = sub
 
@@ -66,7 +102,12 @@ func (nq *NatsQueue) Enqueue(lg types.LogFormat) error {
 		log.Printf("Cannot marshal log. Error: %v", err)
 		return err
 	}
-	nq.conn.Publish(nq.subject, jsonLog)
+	// nq.conn.Publish(nq.subject, jsonLog)
+	ack, err := nq.js.Publish(nq.subject, []byte(jsonLog))
+	if err != nil {
+		return err
+	}
+	log.Printf("Published msg with sequence number %d on stream %q", ack.Sequence, ack.Stream)
 	return nil
 }
 

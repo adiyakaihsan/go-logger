@@ -26,7 +26,7 @@ type Config struct {
 }
 
 func NewApp(cfg Config) (*App, error) {
-	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue")
+	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue", true)
 	if err != nil {
 		log.Fatalf("Failed to initiate channel. Error: %v", err)
 	}
@@ -71,7 +71,7 @@ func (a *App) Shutdown() error {
 
 func Run() {
 	cfg := Config{
-		IndexName:     "index",
+		IndexName:     "index-1/",
 		RetentionDays: 12 * 24 * time.Hour,
 		ShutdownTimer: 5 * time.Second,
 		Port:          "8081",
