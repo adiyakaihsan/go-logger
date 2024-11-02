@@ -40,7 +40,7 @@ func (s *Server) registerRoutes() {
 
 func (s *Server) Start() error {
 	go func() {
-		log.Println("Starting server . . . .")
+		log.Printf("Starting server on: localhost%v", s.server.Addr)
 		if err := s.server.ListenAndServe(); err != nil {
 			log.Printf("HTTP server error: %v", err)
 		}

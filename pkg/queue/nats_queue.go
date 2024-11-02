@@ -3,7 +3,9 @@ package queue
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/adiyakaihsan/go-logger/pkg/types"
@@ -73,15 +75,19 @@ func NewNatsQueue(url, subject, queueName string, jsEnabled bool) (*NatsQueue, e
 	}
 
 	if jsEnabled {
+		pid := os.Getpid()
 		sub, err = nq.js.Subscribe(nq.subject, func(msg *nats.Msg) {
 			nq.msgChan <- msg
 			msg.Ack() // Manually acknowledge the message
-		}, nats.Durable("my-durable-consumer"), nats.ManualAck(), nats.AckWait(30*time.Second))
-
+		}, nats.Durable(fmt.Sprintf("c-%v-%v", pid, queueName)), nats.ManualAck(), nats.AckWait(30*time.Second))
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("Subscribed to subject")
+		subInfo, err := sub.ConsumerInfo()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Subscribed to subject. Subscriber: %v", subInfo.Name)
 	} else {
 		sub, err = nq.conn.QueueSubscribe(nq.subject, nq.queueName, func(msg *nats.Msg) {
 			nq.msgChan <- msg

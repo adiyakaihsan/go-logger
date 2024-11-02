@@ -69,12 +69,19 @@ func (a *App) Shutdown() error {
 	return nil
 }
 
+func getEnvDefault(key, defaultValue string) string {
+    if value, exists := os.LookupEnv(key); exists {
+        return value
+    }
+    return defaultValue
+}
+
 func Run() {
 	cfg := Config{
-		IndexName:     "index-1/",
+		IndexName:     getEnvDefault("INDEX_PREFIX", "index-storage/index"),
 		RetentionDays: 12 * 24 * time.Hour,
 		ShutdownTimer: 5 * time.Second,
-		Port:          "8081",
+		Port:          getEnvDefault("LISTEN_PORT", "8080"),
 	}
 
 	server := NewServer(cfg)
