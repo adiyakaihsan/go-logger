@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -27,7 +28,7 @@ type Config struct {
 }
 
 func NewApp(cfg Config) (*App, error) {
-	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue", true)
+	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue", cfg.Port, true)
 	if err != nil {
 		log.Fatalf("Failed to initiate channel. Error: %v", err)
 	}
@@ -70,43 +71,62 @@ func (a *App) Shutdown() error {
 	return nil
 }
 
-func getEnvDefault(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
 func Run(cmd *cobra.Command, args []string) {
 	port, _ := cmd.Flags().GetInt("port")
-	portString := fmt.Sprintf("%d",port)
+	serverCount, _ := cmd.Flags().GetInt("server")
 
-	cfg := Config{
-		IndexName:     getEnvDefault("INDEX_PREFIX", "index-storage/index"),
-		RetentionDays: 12 * 24 * time.Hour,
-		ShutdownTimer: 5 * time.Second,
-		Port:          portString,
-	}
+	indexPrefix, _ := cmd.Flags().GetString("index-prefix")
 
-	server := NewServer(cfg)
+	var wg sync.WaitGroup
 
-	if err := server.Start(); err != nil {
-		log.Fatalf("Failed to start app: %v", err)
-	}
-
+	// Channel to coordinate shutdown across all servers
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	// Create servers
+	servers := make([]*Server, serverCount)
+
+	for i := 0; i < serverCount; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			log.Printf("increment: %v", i)
+			incrementPort := port + index
+			portString := fmt.Sprintf("%d", incrementPort)
+			indexName := fmt.Sprintf("%s-%d/index", indexPrefix, index+1)
+
+			cfg := Config{
+				IndexName:     indexName,
+				RetentionDays: 12 * 24 * time.Hour,
+				ShutdownTimer: 5 * time.Second,
+				Port:          portString,
+			}
+
+			server := NewServer(cfg)
+			servers[index] = server
+
+			if err := server.Start(); err != nil {
+				log.Fatalf("Failed to start server %d: %v", index, err)
+			}
+
+		}(i)
+	}
 	//Catch kill signal for graceful shutdown
 	sig := <-sigChan
 	log.Printf("Caught signal: %v", sig)
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimer)
-	defer cancel()
+	for i, server := range servers {
+		if server != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Failed to shutdown gracefully: %v", err)
+			if err := server.Shutdown(ctx); err != nil {
+				log.Fatalf("Failed to shutdown server %d gracefully: %v", i, err)
+			}
+			cancel()
+		}
 	}
 
+	wg.Wait()
 	log.Println("All log processed. Shutting down . . . ")
 }

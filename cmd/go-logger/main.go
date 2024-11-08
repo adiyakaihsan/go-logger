@@ -23,11 +23,12 @@ func main() {
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the logging server(s)",
-		Run: app.Run,
+		Run:   app.Run,
 	}
 
-	runCmd.Flags().IntVarP(&serverCount, "count", "c", 1, "Number of servers to run")
+	runCmd.Flags().IntVarP(&serverCount, "server", "s", 1, "Number of servers to run")
 	runCmd.Flags().IntVarP(&serverPort, "port", "p", 8080, "Init Port number")
+	runCmd.Flags().StringP("index-prefix", "i", "index-storage", "prefix for index name")
 	rootCmd.AddCommand(runCmd)
 
 	if err := rootCmd.Execute(); err != nil {
