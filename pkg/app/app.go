@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/adiyakaihsan/go-logger/pkg/queue"
+	"github.com/spf13/cobra"
 )
 
 type App struct {
@@ -70,18 +71,21 @@ func (a *App) Shutdown() error {
 }
 
 func getEnvDefault(key, defaultValue string) string {
-    if value, exists := os.LookupEnv(key); exists {
-        return value
-    }
-    return defaultValue
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
 }
 
-func Run() {
+func Run(cmd *cobra.Command, args []string) {
+	port, _ := cmd.Flags().GetInt("port")
+	portString := fmt.Sprintf("%d",port)
+
 	cfg := Config{
 		IndexName:     getEnvDefault("INDEX_PREFIX", "index-storage/index"),
 		RetentionDays: 12 * 24 * time.Hour,
 		ShutdownTimer: 5 * time.Second,
-		Port:          getEnvDefault("LISTEN_PORT", "8080"),
+		Port:          portString,
 	}
 
 	server := NewServer(cfg)
@@ -105,5 +109,4 @@ func Run() {
 	}
 
 	log.Println("All log processed. Shutting down . . . ")
-
 }

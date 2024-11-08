@@ -6,4 +6,7 @@ curl localhost:8081/api/v1/log/search -d '{"query": "error"}'
 curl -X DELETE localhost:8081/api/v1/log/delete 
 
 Run replica:
-INDEX_PREFIX=<index-name> LISTEN_PORT=<port-name> go run cmd/go-logger/main.go
+INDEX_PREFIX=<index-name> go run cmd/go-logger/main.go run --port 8080
+
+Run jetstream in docker:
+docker run -ti --rm --name nats -p 4222:4222 -p 8222:8222 nats -js -m 8222
