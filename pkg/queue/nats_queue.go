@@ -1,12 +1,11 @@
 package queue
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/adiyakaihsan/go-logger/pkg/types"
@@ -22,7 +21,7 @@ type NatsQueue struct {
 	js        nats.JetStreamContext
 }
 
-func NewNatsQueue(url, subject, queueName string, id string, jsEnabled bool) (*NatsQueue, error) {
+func NewNatsQueue(url, subject, queueName string, jsEnabled bool) (*NatsQueue, error) {
 	opts := []nats.Option{
 		nats.Timeout(5 * time.Second),   // Connection timeout
 		nats.ReconnectWait(time.Second), // Wait 1 second before reconnect
@@ -76,10 +75,11 @@ func NewNatsQueue(url, subject, queueName string, id string, jsEnabled bool) (*N
 	}
 
 	if jsEnabled {
+		pid := os.Getpid()
 		sub, err = nq.js.Subscribe(nq.subject, func(msg *nats.Msg) {
 			nq.msgChan <- msg
 			msg.Ack() // Manually acknowledge the message
-		}, nats.Durable(fmt.Sprintf("c-%v-%v", generateShortHash(id), queueName)), nats.ManualAck(), nats.AckWait(30*time.Second))
+		}, nats.Durable(fmt.Sprintf("c-%v-%v", pid, queueName)), nats.ManualAck(), nats.AckWait(30*time.Second))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -100,18 +100,6 @@ func NewNatsQueue(url, subject, queueName string, id string, jsEnabled bool) (*N
 	nq.sub = sub
 
 	return nq, err
-}
-
-func generateShortHash(seed string) string {
-	// Create a SHA-256 hash of the input
-	hash := sha256.New()
-	hash.Write([]byte(seed))
-
-	// Convert the hash to a hexadecimal string
-	fullHash := hex.EncodeToString(hash.Sum(nil))
-
-	// Return the first 6 characters of the hash
-	return fullHash[:6]
 }
 
 func (nq *NatsQueue) Enqueue(lg types.LogFormat) error {
