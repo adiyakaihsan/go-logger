@@ -110,7 +110,7 @@ func (p *Proxy) proxyIngest(w http.ResponseWriter, r *http.Request, _ httprouter
 		log.Printf("Error1: %v", err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		log.Printf("Error copying response: %v", err)
