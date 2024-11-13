@@ -15,6 +15,7 @@ import (
 
 type Proxy struct {
 	backends []string
+	ring *hashring.HashRing
 }
 
 func (p *Proxy) proxySearch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -80,11 +81,11 @@ func (p *Proxy) proxyIngest(w http.ResponseWriter, r *http.Request, _ httprouter
 	
 	if err := json.NewDecoder(tee).Decode(&logs); err != nil {
 		log.Printf("Cannot decode log. Error: %v", err)
+		return
 	}
 	defer r.Body.Close()
 
-	ring := hashring.New(p.backends)
-	server, _ := ring.GetNode(fmt.Sprintf("%s-%s", logs.Timestamp.String(), logs.Message))
+	server, _ := p.ring.GetNode(buf.String())
 	targetUrl := fmt.Sprintf("%s%s", server, r.URL)
 	log.Printf("Target Backend: %s", targetUrl)
 
@@ -121,10 +122,11 @@ func (p *Proxy) proxyIngest(w http.ResponseWriter, r *http.Request, _ httprouter
 func Run() {	
 	router := httprouter.New()
 	backends := []string{"http://localhost:8083", "http://localhost:8082"}
-
+	ring := hashring.New(backends)
 	// register backend
 	p := &Proxy{
 		backends: backends,
+		ring: ring,
 	}
 
 	router.POST("/api/v1/log/search", p.proxySearch)
