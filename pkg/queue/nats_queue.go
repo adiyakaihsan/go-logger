@@ -38,6 +38,10 @@ func NewNatsQueue(url, subject, queueName string, jsEnabled bool) (*NatsQueue, e
 		}),
 	}
 
+	pid := os.Getpid()
+	queueName = fmt.Sprintf("%s-%d", queueName, pid)
+	subject = fmt.Sprintf("%s-%d", subject, pid)
+
 	nc, err := nats.Connect(url, opts...)
 	if err != nil {
 		return nil, err
@@ -75,11 +79,10 @@ func NewNatsQueue(url, subject, queueName string, jsEnabled bool) (*NatsQueue, e
 	}
 
 	if jsEnabled {
-		pid := os.Getpid()
 		sub, err = nq.js.Subscribe(nq.subject, func(msg *nats.Msg) {
 			nq.msgChan <- msg
 			msg.Ack() // Manually acknowledge the message
-		}, nats.Durable(fmt.Sprintf("c-%v-%v", pid, queueName)), nats.ManualAck(), nats.AckWait(30*time.Second))
+		}, nats.Durable(fmt.Sprintf("c-%v", queueName)), nats.ManualAck(), nats.AckWait(30*time.Second))
 		if err != nil {
 			log.Fatal(err)
 		}
