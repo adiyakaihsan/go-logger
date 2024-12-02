@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -17,7 +18,15 @@ type Server struct {
 
 func NewServer(cfg Config) *Server {
 	router := httprouter.New()
-	app, err := NewApp(cfg)
+
+	opts := []Option{
+		IndexName("index-storage/index"),
+		RetentionDays(12 * 24 * time.Hour),
+		ShutdownTimer(5 * time.Second),
+		Port(cfg.Port),
+	}
+
+	app, err := NewApp(cfg, opts...)
 	if err != nil {
 		log.Fatalf("Cannot instantiate App. Error: %v", err)
 	}

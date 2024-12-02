@@ -26,7 +26,32 @@ type Config struct {
 	Port          string
 }
 
-func NewApp(cfg Config) (*App, error) {
+type Option func(Config)
+
+func IndexName (indexName string) Option {
+	return func(cfg Config) {
+		cfg.IndexName = indexName
+	}
+}
+
+func RetentionDays (retDays time.Duration) Option {
+	return func(cfg Config) {
+		cfg.RetentionDays = retDays
+	}
+}
+
+func ShutdownTimer (duration time.Duration) Option {
+	return func(cfg Config) {
+		cfg.ShutdownTimer = duration
+	}
+}
+
+func Port (port string) Option {
+	return func(cfg Config) {
+		cfg.Port = port
+	}
+}
+func NewApp(cfg Config, opts ...Option) (*App, error) {
 	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue", true)
 	if err != nil {
 		log.Fatalf("Failed to initiate channel. Error: %v", err)
@@ -38,6 +63,17 @@ func NewApp(cfg Config) (*App, error) {
 	}
 
 	processor := NewLogProcessor(logQueue, ilm)
+
+	cfg = Config{
+		IndexName:     "INDEX_PREFIX",
+		RetentionDays: 12 * 24 * time.Hour,
+		ShutdownTimer: 5 * time.Second,
+		Port:          "8080",
+	}
+
+	for _, opt := range opts {
+		opt(cfg)
+	}
 
 	app := &App{
 		queue:     logQueue,
