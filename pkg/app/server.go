@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/spf13/cobra"
 )
 
 type Server struct {
@@ -15,9 +20,12 @@ type Server struct {
 	app    *App
 }
 
-func NewServer(cfg Config) *Server {
+func NewServer(opts ...Option) *Server {
 	router := httprouter.New()
-	app, err := NewApp(cfg)
+
+	cfg := applyOptions(defaultConfig, opts...)
+
+	app, err := NewApp(opts...)
 	if err != nil {
 		log.Fatalf("Cannot instantiate App. Error: %v", err)
 	}
@@ -55,4 +63,39 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	// shutdown App
 	s.app.Shutdown()
 	return s.server.Shutdown(ctx)
+}
+
+func Run(cmd *cobra.Command, args []string) {
+	port, _ := cmd.Flags().GetInt("port")
+	indexName, _ := cmd.Flags().GetString("index")
+	portString := fmt.Sprintf("%d", port)
+
+	opts := []Option{
+		IndexName(indexName),
+		RetentionDays(12 * 24 * time.Hour),
+		ShutdownTimer(5 * time.Second),
+		Port(portString),
+	}
+
+	server := NewServer(opts...)
+
+	if err := server.Start(); err != nil {
+		log.Fatalf("Failed to start app: %v", err)
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	//Catch kill signal for graceful shutdown
+	sig := <-sigChan
+	log.Printf("Caught signal: %v", sig)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultConfig.ShutdownTimer)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Failed to shutdown gracefully: %v", err)
+	}
+
+	log.Println("All log processed. Shutting down . . . ")
 }
