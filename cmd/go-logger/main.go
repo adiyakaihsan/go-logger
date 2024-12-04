@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	serverCount int
+	indexName string
 	serverPort  int
 )
 
@@ -26,7 +26,7 @@ func main() {
 		Run: app.Run,
 	}
 
-	runCmd.Flags().IntVarP(&serverCount, "count", "c", 1, "Number of servers to run")
+	runCmd.Flags().StringVarP(&indexName, "index", "i", "index-storage/index", "Index Prefix")
 	runCmd.Flags().IntVarP(&serverPort, "port", "p", 8080, "Init Port number")
 	rootCmd.AddCommand(runCmd)
 
