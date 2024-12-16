@@ -4,13 +4,13 @@ import (
 	"log"
 	"os"
 
-	"github.com/adiyakaihsan/go-logger/pkg/app"
+	"github.com/adiyakaihsan/go-logger/pkg/server"
 	"github.com/spf13/cobra"
 )
 
 var (
-	serverCount int
-	serverPort  int
+	serverPort int
+	indexName  string
 )
 
 func main() {
@@ -23,10 +23,10 @@ func main() {
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the logging server(s)",
-		Run: app.Run,
+		Run:   server.Run,
 	}
 
-	runCmd.Flags().IntVarP(&serverCount, "count", "c", 1, "Number of servers to run")
+	runCmd.Flags().StringVarP(&indexName, "index", "i", "index-storage/index", "Index Prefix")
 	runCmd.Flags().IntVarP(&serverPort, "port", "p", 8080, "Init Port number")
 	rootCmd.AddCommand(runCmd)
 

@@ -1,16 +1,10 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/adiyakaihsan/go-logger/pkg/queue"
-	"github.com/spf13/cobra"
 )
 
 type App struct {
@@ -19,17 +13,16 @@ type App struct {
 	processor *LogProcessor
 }
 
-type Config struct {
-	IndexName     string
-	RetentionDays time.Duration
-	ShutdownTimer time.Duration
-	Port          string
-}
-
-func NewApp(cfg Config) (*App, error) {
+func NewApp(opts ...AppOption) (*App, error) {
 	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue", true)
 	if err != nil {
 		log.Fatalf("Failed to initiate channel. Error: %v", err)
+	}
+
+	cfg := applyOptions(defaultConfig, opts...)
+
+	for _, opt := range opts {
+		opt(cfg)
 	}
 
 	ilm, err := NewIndexLifecycleManager(cfg.IndexName, cfg.RetentionDays)
@@ -70,43 +63,9 @@ func (a *App) Shutdown() error {
 	return nil
 }
 
-func getEnvDefault(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
-func Run(cmd *cobra.Command, args []string) {
-	port, _ := cmd.Flags().GetInt("port")
-	portString := fmt.Sprintf("%d",port)
-
-	cfg := Config{
-		IndexName:     getEnvDefault("INDEX_PREFIX", "index-storage/index"),
-		RetentionDays: 12 * 24 * time.Hour,
-		ShutdownTimer: 5 * time.Second,
-		Port:          portString,
-	}
-
-	server := NewServer(cfg)
-
-	if err := server.Start(); err != nil {
-		log.Fatalf("Failed to start app: %v", err)
-	}
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	//Catch kill signal for graceful shutdown
-	sig := <-sigChan
-	log.Printf("Caught signal: %v", sig)
-
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimer)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Failed to shutdown gracefully: %v", err)
-	}
-
-	log.Println("All log processed. Shutting down . . . ")
-}
+// func getEnvDefault(key, defaultValue string) string {
+// 	if value, exists := os.LookupEnv(key); exists {
+// 		return value
+// 	}
+// 	return defaultValue
+// }

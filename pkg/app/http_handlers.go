@@ -9,7 +9,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func (app App) ingester(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (app App) Ingester(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var logs types.LogFormat
 
 	if err := json.NewDecoder(r.Body).Decode(&logs); err != nil {
@@ -22,7 +22,7 @@ func (app App) ingester(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	w.Write([]byte("OK"))
 }
 
-func (app App) search(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (app App) Search(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var searchQuery types.SearchFormat
 
 	if err := json.NewDecoder(r.Body).Decode(&searchQuery); err != nil {
