@@ -13,7 +13,7 @@ type App struct {
 	processor *LogProcessor
 }
 
-func NewApp(opts ...Option) (*App, error) {
+func NewApp(opts ...AppOption) (*App, error) {
 	logQueue, err := queue.NewNatsQueue("nats://localhost:4222", "log", "logQueue", true)
 	if err != nil {
 		log.Fatalf("Failed to initiate channel. Error: %v", err)

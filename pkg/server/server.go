@@ -1,4 +1,4 @@
-package app
+package server
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/adiyakaihsan/go-logger/pkg/app"
 	"github.com/julienschmidt/httprouter"
 	"github.com/spf13/cobra"
 )
@@ -17,15 +18,25 @@ import (
 type Server struct {
 	server *http.Server
 	router *httprouter.Router
-	app    *App
+	app    *app.App
 }
 
-func NewServer(opts ...Option) *Server {
+func NewServer(serverOpts ...ServerOption) *Server {
+
+
 	router := httprouter.New()
 
-	cfg := applyOptions(defaultConfig, opts...)
+	cfg := applyOptions(defaultConfig, serverOpts...)
 
-	app, err := NewApp(opts...)
+	indexName := cfg.IndexName
+
+	appOpts := []app.AppOption{
+		app.IndexName(indexName),
+		app.RetentionDays(12 * 24 * time.Hour),
+		app.ShutdownTimer(5 * time.Second),
+	}
+
+	app, err := app.NewApp(appOpts...)
 	if err != nil {
 		log.Fatalf("Cannot instantiate App. Error: %v", err)
 	}
@@ -42,8 +53,8 @@ func NewServer(opts ...Option) *Server {
 }
 
 func (s *Server) registerRoutes() {
-	s.router.POST("/api/v1/log/ingest", s.app.ingester)
-	s.router.POST("/api/v1/log/search", s.app.search)
+	s.router.POST("/api/v1/log/ingest", s.app.Ingester)
+	s.router.POST("/api/v1/log/search", s.app.Search)
 }
 
 func (s *Server) Start() error {
@@ -70,11 +81,10 @@ func Run(cmd *cobra.Command, args []string) {
 	indexName, _ := cmd.Flags().GetString("index")
 	portString := fmt.Sprintf("%d", port)
 
-	opts := []Option{
-		IndexName(indexName),
-		RetentionDays(12 * 24 * time.Hour),
+	opts := []ServerOption{
 		ShutdownTimer(5 * time.Second),
 		Port(portString),
+		IndexName(indexName),
 	}
 
 	server := NewServer(opts...)

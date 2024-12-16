@@ -4,13 +4,13 @@ import (
 	"log"
 	"os"
 
-	"github.com/adiyakaihsan/go-logger/pkg/app"
+	"github.com/adiyakaihsan/go-logger/pkg/server"
 	"github.com/spf13/cobra"
 )
 
 var (
-	indexName string
-	serverPort  int
+	serverPort int
+	indexName  string
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the logging server(s)",
-		Run: app.Run,
+		Run:   server.Run,
 	}
 
 	runCmd.Flags().StringVarP(&indexName, "index", "i", "index-storage/index", "Index Prefix")
